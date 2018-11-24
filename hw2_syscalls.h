@@ -52,7 +52,6 @@ int is_changeable(pid_t pid) {
 	If no process with the corresponding PID exists - ESRCH
 	if the given process or the calling process is a CHANGEABLE process - EINVAL
 */
-
 int make_changeable(pid_t pid) {
 // wrapper
 	int res = 0;
@@ -103,7 +102,6 @@ int change(int val) {
 	If no process with the corresponding PID exists - ESRCH
 	If the target process is not CHANGEABLE – EINVAL
 */
-
 int get_policy(pid_t pid) { 
 	int res = 0;
 	errno = 0;
