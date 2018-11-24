@@ -1432,8 +1432,10 @@ asmlinkage long sys_sched_get_priority_min(int policy)
 	case SCHED_RR:
 		ret = 1;
 		break;
+	case SCHED_CHANGEABLE
 	case SCHED_OTHER:
 		ret = 0;
+		break;
 	}
 	return ret;
 }
