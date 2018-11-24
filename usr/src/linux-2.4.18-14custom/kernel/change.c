@@ -5,3 +5,5 @@
 	regular OTHER processes. If val is 1, all CHANGEABLE processes should start
 	following the regime specified previously.
 */
+int change(int val) {
+}

@@ -5,3 +5,5 @@
 	Possible errors:
 	If no process with the corresponding PID exists - ESRCH
 */
+int is_changeable(pid_t pid) {
+}

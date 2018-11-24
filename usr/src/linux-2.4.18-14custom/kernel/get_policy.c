@@ -6,3 +6,5 @@
 	If no process with the corresponding PID exists - ESRCH
 	If the target process is not CHANGEABLE – EINVAL
 */
+int get_policy(pid_t pid) {
+}
