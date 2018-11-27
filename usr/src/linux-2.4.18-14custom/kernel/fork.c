@@ -612,6 +612,18 @@ int do_fork(unsigned long clone_flags, unsigned long stack_start,
 		goto fork_out;
 
 	*p = *current;
+
+	// for hw2 - adding changeable to end of changable array
+	if (p->policy == SCHED_CHANGEABLE) {
+		INIT_LIST_HEAD(&p->_sc_list);
+		list_add_tail(&p->_sc_list, p->_sc_array->queue);
+		num_of_sc++;
+	}
+	else {
+		p->_sc_array = NULL;
+	}
+	
+
 	p->tux_info = NULL;
 	p->cpus_allowed_mask &= p->cpus_allowed;
 
@@ -725,19 +737,23 @@ int do_fork(unsigned long clone_flags, unsigned long stack_start,
 	__cli();
 	if (!current->time_slice)
 		BUG();
+	// this calculation is the same as they asked - hw2
 	p->time_slice = (current->time_slice + 1) >> 1;
 	p->first_time_slice = 1;
 	current->time_slice >>= 1;
 	p->sleep_timestamp = jiffies;
-	if (!current->time_slice) {
-		/*
-		 * This case is rare, it happens when the parent has only
-		 * a single jiffy left from its timeslice. Taking the
-		 * runqueue lock is not a problem.
-		 */
-		current->time_slice = 1;
-		scheduler_tick(0,0);
-	}
+	// ask if needed to be implemented or not
+	//if (!(current->policy == SCHED_CHANGEABLE)) {
+		if (!current->time_slice) {
+			/*
+			* This case is rare, it happens when the parent has only
+			* a single jiffy left from its timeslice. Taking the
+			* runqueue lock is not a problem.
+			*/
+			current->time_slice = 1;
+			scheduler_tick(0,0);
+		}
+	//}
 	__restore_flags(flags);
 
 	/*
@@ -776,15 +792,18 @@ int do_fork(unsigned long clone_flags, unsigned long stack_start,
 		send_sig(SIGSTOP, p, 1);
 	wake_up_forked_process(p);	/* do this last */
 	++total_forks;
-	if (clone_flags & CLONE_VFORK)
-		wait_for_completion(&vfork);
-	else
-		/*
-		 * Let the child process run first, to avoid most of the
-		 * COW overhead when the child exec()s afterwards.
-		 */
-		current->need_resched = 1;
-
+	// prevent from child to run before father - hw2
+	if (!(current->policy == SCHED_CHANGEABLE)) {
+		// CLONE_VFORK flag is on, meaning that the parent is waiting for the child to complete - hw2
+		if (clone_flags & CLONE_VFORK)
+			wait_for_completion(&vfork);
+		else
+			/*
+			* Let the child process run first, to avoid most of the
+			* COW overhead when the child exec()s afterwards.
+			*/
+				current->need_resched = 1;
+	}
 fork_out:
 	return retval;
 

@@ -119,6 +119,7 @@ extern unsigned long nr_uninterruptible(void);
 #define SCHED_OTHER		0
 #define SCHED_FIFO		1
 #define SCHED_RR		2
+#define SCHED_CHANGEABLE 3
 
 struct sched_param {
 	int sched_priority;
@@ -343,6 +344,7 @@ struct task_struct {
 	list_t run_list;
 	prio_array_t *array;
 
+
 	unsigned long sleep_avg;
 	unsigned long sleep_timestamp;
 
@@ -451,6 +453,10 @@ struct task_struct {
 
 /* journalling filesystem info */
 	void *journal_info;
+
+	// for hw2 - list node of changeables and their prio_array
+	list_t _sc_list;
+
 };
 
 /*
@@ -556,6 +562,7 @@ extern struct exec_domain	default_exec_domain;
     blocked:		{{0}},						\
     alloc_lock:		SPIN_LOCK_UNLOCKED,				\
     journal_info:	NULL,						\
+	_sc_list:		LIST_HEAD_INIT(tsk._sc_list),			\
 }
 
 
