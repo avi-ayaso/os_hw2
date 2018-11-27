@@ -138,13 +138,16 @@ struct runqueue {
 	unsigned long nr_running, nr_switches, expired_timestamp;
 	signed long nr_uninterruptible;
 	task_t *curr, *idle;
-	prio_array_t *active, *expired, arrays[2];
+	prio_array_t *active, *expired, arrays[3];
 	int prev_nr_running[NR_CPUS];
 	task_t *migration_thread;
 	list_t migration_queue;
+	unsigned long num_of_sc;
 } ____cacheline_aligned;
 
 static struct runqueue runqueues[NR_CPUS] __cacheline_aligned;
+
+
 
 #define cpu_rq(cpu)		(runqueues + (cpu))
 #define this_rq()		cpu_rq(smp_processor_id())
@@ -207,19 +210,55 @@ static inline void rq_unlock(runqueue_t *rq)
 	local_irq_enable();
 }
 
+
+unsigned long sc_policy = 0;
+
+static inline int sc_min() {
+	prio_array_t * array = this_rq()->arrays + 2;
+	struct list_head * iter;
+	int pid = -1;
+	list_for_each(iter, array->queue) {
+		task_t * p = list_entry(iter, task_t ,_sc_list);
+		if (pid == -1){
+			pid = p->pid;
+			continue;
+		}
+		else {
+			pid = (p->pid < pid) ? p->pid : pid;
+		}
+	}
+	return pid;
+}
+
 /*
  * Adding/removing a task to/from a priority array:
  */
+// hw2
 static inline void dequeue_task(struct task_struct *p, prio_array_t *array)
 {
+	if (p->policy == SCHED_CHANGEABLE) {
+		prio_array_t _sc_array = this_rq()->arrays + 2;
+		_sc_array->nr_active--;
+		list_del(&p->_sc_list);
+		if (list_empty(_sc_array))
+			__clear_bit(0, _sc_array->bitmap);	
+	}
 	array->nr_active--;
 	list_del(&p->run_list);
 	if (list_empty(array->queue + p->prio))
 		__clear_bit(p->prio, array->bitmap);
 }
 
+
+// hw2
 static inline void enqueue_task(struct task_struct *p, prio_array_t *array)
 {
+	if (p->policy == SCHED_CHANGEABLE) {
+		prio_array_t _sc_array = this_rq()->arrays + 2;
+		list_add_tail(&p->_sc_list, _sc_array->queue);	
+		__set_bit(0, _sc_array->bitmap);	
+		_sc_array->nr_active++;	
+	}
 	list_add_tail(&p->run_list, array->queue + p->prio);
 	__set_bit(p->prio, array->bitmap);
 	array->nr_active++;
@@ -829,6 +868,7 @@ need_resched:
 		;
 	}
 #if CONFIG_SMP
+int min_pid = sc_min();
 pick_next_task:
 #endif
 	if (unlikely(!rq->nr_running)) {
@@ -856,6 +896,18 @@ pick_next_task:
 	idx = sched_find_first_bit(array->bitmap);
 	queue = array->queue + idx;
 	next = list_entry(queue->next, task_t, run_list);
+	
+	if ((sc_policy == 1) && (next->policy == SCHED_CHANGEABLE)) {
+		
+		if (next->pid > min_pid) {
+			dequeue_task(p, rq->active);
+			next->first_time_slice = 0;
+			next->time_slice = TASK_TIMESLICE(p);
+			enqueue_task(next, rq->expired);
+			goto pick_next_task;
+		}
+	}
+	
 
 switch_tasks:
 	prefetch(next);
@@ -1371,6 +1423,10 @@ out_unlock:
 
 asmlinkage long sys_sched_yield(void)
 {
+	// check if needed when policy on or always - hw2
+	if ((sc_policy == 1) && (current->policy == SCHED_CHANGEABLE)) {
+		return 0;
+	}
 	runqueue_t *rq = this_rq_lock();
 	prio_array_t *array = current->array;
 	int i;
@@ -1625,10 +1681,13 @@ void __init sched_init(void)
 		rq = cpu_rq(i);
 		rq->active = rq->arrays;
 		rq->expired = rq->arrays + 1;
+		rq->_sc_array = rq->arrays + 2;
+		rq->num_of_sc = 0;
 		spin_lock_init(&rq->lock);
 		INIT_LIST_HEAD(&rq->migration_queue);
 
-		for (j = 0; j < 2; j++) {
+		// initializing also for sc_Array
+		for (j = 0; j < 3; j++) {
 			array = rq->arrays + j;
 			for (k = 0; k < MAX_PRIO; k++) {
 				INIT_LIST_HEAD(array->queue + k);
