@@ -5,5 +5,13 @@
 	Possible errors:
 	If no process with the corresponding PID exists - ESRCH
 */
-int is_changeable(pid_t pid) {
+int sys_is_changeable(pid_t pid) {
+	if (pid < 0) {
+		return -ESRCH;
+	}
+	task_t * p = find_task_by_pid(pid);
+	if ( p == NULL ) {
+		return -ESRCH;
+	}
+	return (p->policy == SCHED_CHANGEABLE);
 }

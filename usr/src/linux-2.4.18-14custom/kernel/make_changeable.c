@@ -15,5 +15,5 @@
 	If no process with the corresponding PID exists - ESRCH
 	if the given process or the calling process is a CHANGEABLE process - EINVAL
 */
-int make_changeable(pid_t pid) {
+int sys_make_changeable(pid_t pid) {
 }
