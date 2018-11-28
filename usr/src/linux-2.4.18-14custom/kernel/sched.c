@@ -237,11 +237,11 @@ static inline int sc_min() {
 static inline void dequeue_task(struct task_struct *p, prio_array_t *array)
 {
 	if (p->policy == SCHED_CHANGEABLE) {
-		prio_array_t _sc_array = this_rq()->arrays + 2;
-		_sc_array->nr_active--;
+		prio_array_t * _sc_array = this_rq()->arrays + 2;
 		list_del(&p->_sc_list);
 		if (list_empty(_sc_array))
-			__clear_bit(0, _sc_array->bitmap);	
+			__clear_bit(0, _sc_array->bitmap);
+		_sc_array->nr_active--;
 	}
 	array->nr_active--;
 	list_del(&p->run_list);
@@ -254,7 +254,7 @@ static inline void dequeue_task(struct task_struct *p, prio_array_t *array)
 static inline void enqueue_task(struct task_struct *p, prio_array_t *array)
 {
 	if (p->policy == SCHED_CHANGEABLE) {
-		prio_array_t _sc_array = this_rq()->arrays + 2;
+		prio_array_t * _sc_array = this_rq()->arrays + 2;
 		list_add_tail(&p->_sc_list, _sc_array->queue);	
 		__set_bit(0, _sc_array->bitmap);	
 		_sc_array->nr_active++;	
@@ -415,7 +415,9 @@ repeat_lock_task:
 		/*
 		 * If sync is set, a resched_task() is a NOOP
 		 */
-		if (p->prio < rq->curr->prio)
+		 
+		 //for hw2
+		if ( (p->prio < rq->curr->prio) || ( (sc_policy == 1) && (p->policy == SCHED_CHANGEABLE) && (p->pid > sc_min()) ) )
 			resched_task(rq->curr);
 		success = 1;
 	}
@@ -806,9 +808,15 @@ void scheduler_tick(int user_tick, int system)
 	 * goes to sleep or uses up its timeslice. This makes
 	 * it possible for interactive tasks to use up their
 	 * timeslices at their highest priority levels.
-	 */
+	 */	
 	if (p->sleep_avg)
 		p->sleep_avg--;
+	
+	// for hw2
+	if( (p->policy == SCHED_CHANGEABLE) && (sc_policy == 1) ) {
+		goto out;
+	}
+	
 	if (!--p->time_slice) {
 		dequeue_task(p, rq->active);
 		set_tsk_need_resched(p);

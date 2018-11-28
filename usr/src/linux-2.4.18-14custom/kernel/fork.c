@@ -615,9 +615,11 @@ int do_fork(unsigned long clone_flags, unsigned long stack_start,
 
 	// for hw2 - adding changeable to end of changable array
 	if (p->policy == SCHED_CHANGEABLE) {
-		INIT_LIST_HEAD(&p->_sc_list);
-		list_add_tail(&p->_sc_list, p->_sc_array->queue);
-		num_of_sc++;
+		(this_rq()->num_of_sc)++;
+		prio_array_t * _sc_array = this_rq()->arrays + 2;
+		list_add_tail(&p->_sc_list, _sc_array->queue);	
+		__set_bit(0, _sc_array->bitmap);	
+		_sc_array->nr_active++;
 	}
 	else {
 		p->_sc_array = NULL;
@@ -735,25 +737,23 @@ int do_fork(unsigned long clone_flags, unsigned long stack_start,
 	 */
 	__save_flags(flags);
 	__cli();
-	if (!current->time_slice)
+	if (!current->time_slice && (current->policy != SCHED_CHANGEABLE) )
 		BUG();
 	// this calculation is the same as they asked - hw2
 	p->time_slice = (current->time_slice + 1) >> 1;
 	p->first_time_slice = 1;
 	current->time_slice >>= 1;
 	p->sleep_timestamp = jiffies;
-	// ask if needed to be implemented or not
-	//if (!(current->policy == SCHED_CHANGEABLE)) {
-		if (!current->time_slice) {
-			/*
-			* This case is rare, it happens when the parent has only
-			* a single jiffy left from its timeslice. Taking the
-			* runqueue lock is not a problem.
-			*/
-			current->time_slice = 1;
-			scheduler_tick(0,0);
-		}
-	//}
+	// ask if needed to be implemented or not - hw2
+	if (!current->time_slice) {
+		/*
+		* This case is rare, it happens when the parent has only
+		* a single jiffy left from its timeslice. Taking the
+		* runqueue lock is not a problem.
+		*/
+		current->time_slice = 1;
+		scheduler_tick(0,0);
+	}
 	__restore_flags(flags);
 
 	/*

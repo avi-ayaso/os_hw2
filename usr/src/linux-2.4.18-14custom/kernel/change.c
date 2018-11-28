@@ -1,5 +1,7 @@
 
-extern change_on;
+#include "sys_calls_utills.h"
+
+extern sc_policy;
 /*
 === system call number 245 ===
 	The syscall changes the regime for SCHED_CHANGEABLE processes.

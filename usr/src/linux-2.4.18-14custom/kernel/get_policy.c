@@ -1,5 +1,7 @@
 
-extern change_on;
+#include "sys_calls_utills.h"
+
+extern sc_policy;
 
 /*
 === system call number 246 ===
@@ -13,7 +15,7 @@ int sys_get_policy(pid_t pid) {
 	int res = sys_is_changeable(pid);
 	switch(res) {
 		case 0:	res=-EINVAL; break;
-		case 1:	res=change_on; break;
+		case 1:	res=sc_policy; break;
 		default:	
 	}
 	return res;

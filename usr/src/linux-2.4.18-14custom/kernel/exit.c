@@ -30,6 +30,11 @@ static void release_task(struct task_struct * p)
 {
 	if (p == current)
 		BUG();
+	
+	//for hw2
+	if( (p->policy == SCHED_CHANGEABLE) && !(--((this->rq())->num_of_sc)) ) {
+		sc_policy = 0;
+	}
 #ifdef CONFIG_SMP
 	wait_task_inactive(p);
 #endif

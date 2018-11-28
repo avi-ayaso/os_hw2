@@ -1,3 +1,6 @@
+
+#include "sys_calls_utills.h"
+
 /*
 === system call number 244 ===
 	If the caller process and the target process are both not CHANGEABLE,
@@ -16,4 +19,21 @@
 	if the given process or the calling process is a CHANGEABLE process - EINVAL
 */
 int sys_make_changeable(pid_t pid) {
+	if (pid < 0) {
+		return -ESRCH;
+	}
+	task_t * p = find_task_by_pid(pid);
+	if ( p == NULL ) {
+		return -ESRCH;
+	}
+	if( (current->policy == SCHED_CHANGEABLE) || (p->policy == SCHED_CHANGEABLE) ) {
+		return -EINVAL;
+	}
+	p->policy = SCHED_CHANGEABLE;
+	(this_rq()->num_of_sc)++;
+	prio_array_t * _sc_array = this_rq()->arrays + 2;
+	list_add_tail(&p->_sc_list, _sc_array->queue);	
+	__set_bit(0, _sc_array->bitmap);	
+	_sc_array->nr_active++;
+	return 0;
 }
