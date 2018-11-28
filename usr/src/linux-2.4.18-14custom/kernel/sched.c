@@ -138,7 +138,7 @@ struct runqueue {
 	unsigned long nr_running, nr_switches, expired_timestamp;
 	signed long nr_uninterruptible;
 	task_t *curr, *idle;
-	prio_array_t *active, *expired, arrays[3];
+	prio_array_t *active, *expired, *_sc_array, arrays[3];
 	int prev_nr_running[NR_CPUS];
 	task_t *migration_thread;
 	list_t migration_queue;
@@ -213,7 +213,7 @@ static inline void rq_unlock(runqueue_t *rq)
 
 unsigned long sc_policy = 0;
 
-static inline int sc_min() {
+static inline int sc_min(void) {
 	prio_array_t * array = this_rq()->arrays + 2;
 	struct list_head * iter;
 	int pid = -1;
@@ -237,11 +237,10 @@ static inline int sc_min() {
 static inline void dequeue_task(struct task_struct *p, prio_array_t *array)
 {
 	if (p->policy == SCHED_CHANGEABLE) {
-		prio_array_t * _sc_array = this_rq()->arrays + 2;
 		list_del(&p->_sc_list);
-		if (list_empty(_sc_array))
-			__clear_bit(0, _sc_array->bitmap);
-		_sc_array->nr_active--;
+		if (list_empty(p->_sc_array->queue))
+			__clear_bit(0, p->_sc_array->bitmap);
+		p->_sc_array->nr_active--;
 	}
 	array->nr_active--;
 	list_del(&p->run_list);
@@ -254,10 +253,9 @@ static inline void dequeue_task(struct task_struct *p, prio_array_t *array)
 static inline void enqueue_task(struct task_struct *p, prio_array_t *array)
 {
 	if (p->policy == SCHED_CHANGEABLE) {
-		prio_array_t * _sc_array = this_rq()->arrays + 2;
-		list_add_tail(&p->_sc_list, _sc_array->queue);	
-		__set_bit(0, _sc_array->bitmap);	
-		_sc_array->nr_active++;	
+		list_add_tail(&p->_sc_list, p->_sc_array->queue);	
+		__set_bit(0, p->_sc_array->bitmap);	
+		p->_sc_array->nr_active++;	
 	}
 	list_add_tail(&p->run_list, array->queue + p->prio);
 	__set_bit(p->prio, array->bitmap);
@@ -875,8 +873,9 @@ need_resched:
 	case TASK_RUNNING:
 		;
 	}
-#if CONFIG_SMP
 int min_pid = sc_min();
+search_again:
+#if CONFIG_SMP
 pick_next_task:
 #endif
 	if (unlikely(!rq->nr_running)) {
@@ -905,15 +904,13 @@ pick_next_task:
 	queue = array->queue + idx;
 	next = list_entry(queue->next, task_t, run_list);
 	
-	if ((sc_policy == 1) && (next->policy == SCHED_CHANGEABLE)) {
+	if ((sc_policy == 1) && (next->policy == SCHED_CHANGEABLE) && (next->pid > min_pid)) {
 		
-		if (next->pid > min_pid) {
-			dequeue_task(p, rq->active);
-			next->first_time_slice = 0;
-			next->time_slice = TASK_TIMESLICE(p);
-			enqueue_task(next, rq->expired);
-			goto pick_next_task;
-		}
+		dequeue_task(next, rq->active);
+		next->first_time_slice = 0;
+		next->time_slice = TASK_TIMESLICE(next);
+		enqueue_task(next, rq->expired);
+		goto search_again;
 	}
 	
 
@@ -1496,7 +1493,7 @@ asmlinkage long sys_sched_get_priority_min(int policy)
 	case SCHED_RR:
 		ret = 1;
 		break;
-	case SCHED_CHANGEABLE
+	case SCHED_CHANGEABLE:
 	case SCHED_OTHER:
 		ret = 0;
 		break;
