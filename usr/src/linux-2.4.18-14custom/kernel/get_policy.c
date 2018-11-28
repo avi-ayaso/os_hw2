@@ -1,7 +1,7 @@
 
 #include "sys_calls_utills.h"
 
-extern sc_policy;
+extern int sc_policy;
 
 /*
 === system call number 246 ===

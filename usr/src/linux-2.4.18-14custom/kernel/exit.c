@@ -21,6 +21,9 @@
 #include <asm/pgtable.h>
 #include <asm/mmu_context.h>
 
+//for hw2
+extern int num_of_sc;
+
 extern void sem_exit (void);
 extern struct task_struct *child_reaper;
 
@@ -32,7 +35,7 @@ static void release_task(struct task_struct * p)
 		BUG();
 	
 	//for hw2
-	if( (p->policy == SCHED_CHANGEABLE) && !(--((this->rq())->num_of_sc)) ) {
+	if( (p->policy == SCHED_CHANGEABLE) && !(--num_of_sc) ) {
 		sc_policy = 0;
 	}
 #ifdef CONFIG_SMP

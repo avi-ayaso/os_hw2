@@ -1,6 +1,9 @@
 
 #include "sys_calls_utills.h"
 
+extern int num_of_sc;
+extern prio_array_t _sc_array;
+
 /*
 === system call number 244 ===
 	If the caller process and the target process are both not CHANGEABLE,
@@ -30,10 +33,9 @@ int sys_make_changeable(pid_t pid) {
 		return -EINVAL;
 	}
 	p->policy = SCHED_CHANGEABLE;
-	(this_rq()->num_of_sc)++;
-	prio_array_t * _sc_array = this_rq()->arrays + 2;
-	list_add_tail(&p->_sc_list, _sc_array->queue);	
-	__set_bit(0, _sc_array->bitmap);	
-	_sc_array->nr_active++;
+	num_of_sc++;
+	list_add_tail(&p->_sc_list, _sc_array.queue);	
+	__set_bit(0, _sc_array.bitmap);	
+	_sc_array.nr_active++;
 	return 0;
 }

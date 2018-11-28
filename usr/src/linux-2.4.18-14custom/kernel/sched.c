@@ -138,16 +138,16 @@ struct runqueue {
 	unsigned long nr_running, nr_switches, expired_timestamp;
 	signed long nr_uninterruptible;
 	task_t *curr, *idle;
-	prio_array_t *active, *expired, *_sc_array, arrays[3];
+	prio_array_t *active, *expired, arrays[2];
 	int prev_nr_running[NR_CPUS];
 	task_t *migration_thread;
 	list_t migration_queue;
-	unsigned long num_of_sc;
 } ____cacheline_aligned;
 
 static struct runqueue runqueues[NR_CPUS] __cacheline_aligned;
 
-
+int num_of_sc;
+prio_array_t _sc_array;
 
 #define cpu_rq(cpu)		(runqueues + (cpu))
 #define this_rq()		cpu_rq(smp_processor_id())
@@ -211,13 +211,12 @@ static inline void rq_unlock(runqueue_t *rq)
 }
 
 
-unsigned long sc_policy = 0;
+int sc_policy = 0;
 
 static inline int sc_min(void) {
-	prio_array_t * array = this_rq()->arrays + 2;
 	struct list_head * iter;
 	int pid = -1;
-	list_for_each(iter, array->queue) {
+	list_for_each(iter, _sc_array.queue) {
 		task_t * p = list_entry(iter, task_t ,_sc_list);
 		if (pid == -1){
 			pid = p->pid;
@@ -238,9 +237,9 @@ static inline void dequeue_task(struct task_struct *p, prio_array_t *array)
 {
 	if (p->policy == SCHED_CHANGEABLE) {
 		list_del(&p->_sc_list);
-		if (list_empty(p->_sc_array->queue))
-			__clear_bit(0, p->_sc_array->bitmap);
-		p->_sc_array->nr_active--;
+		if (list_empty(_sc_array.queue))
+			__clear_bit(0, _sc_array.bitmap);
+		_sc_array.nr_active--;
 	}
 	array->nr_active--;
 	list_del(&p->run_list);
@@ -253,9 +252,9 @@ static inline void dequeue_task(struct task_struct *p, prio_array_t *array)
 static inline void enqueue_task(struct task_struct *p, prio_array_t *array)
 {
 	if (p->policy == SCHED_CHANGEABLE) {
-		list_add_tail(&p->_sc_list, p->_sc_array->queue);	
-		__set_bit(0, p->_sc_array->bitmap);	
-		p->_sc_array->nr_active++;	
+		list_add_tail(&p->_sc_list, _sc_array.queue);	
+		__set_bit(0, _sc_array.bitmap);	
+		_sc_array.nr_active++;	
 	}
 	list_add_tail(&p->run_list, array->queue + p->prio);
 	__set_bit(p->prio, array->bitmap);
@@ -1686,13 +1685,11 @@ void __init sched_init(void)
 		rq = cpu_rq(i);
 		rq->active = rq->arrays;
 		rq->expired = rq->arrays + 1;
-		rq->_sc_array = rq->arrays + 2;
-		rq->num_of_sc = 0;
+		num_of_sc = 0;
 		spin_lock_init(&rq->lock);
 		INIT_LIST_HEAD(&rq->migration_queue);
 
-		// initializing also for sc_Array
-		for (j = 0; j < 3; j++) {
+		for (j = 0; j < 2; j++) {
 			array = rq->arrays + j;
 			for (k = 0; k < MAX_PRIO; k++) {
 				INIT_LIST_HEAD(array->queue + k);
@@ -1702,6 +1699,10 @@ void __init sched_init(void)
 			__set_bit(MAX_PRIO, array->bitmap);
 		}
 	}
+	// initializing also for sc_array - hw2
+	INIT_LIST_HEAD(_sc_array.queue);
+	__clear_bit(0, _sc_array.bitmap);
+	__set_bit(1, _sc_array.bitmap);
 	/*
 	 * We have to do a little magic to get the first
 	 * process right in SMP mode.

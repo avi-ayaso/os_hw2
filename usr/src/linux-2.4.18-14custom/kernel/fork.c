@@ -29,7 +29,8 @@
 #include <asm/uaccess.h>
 #include <asm/mmu_context.h>
 
-#define num_of_sc() {runqueue->num_of_sc}
+extern int num_of_sc;
+extern prio_array_t _sc_array;
 
 /* The idle threads do not count.. */
 int nr_threads;
@@ -617,12 +618,11 @@ int do_fork(unsigned long clone_flags, unsigned long stack_start,
 
 	// for hw2 - adding changeable to end of changable array
 	if (p->policy == SCHED_CHANGEABLE) {
-		num_of_sc()++;
-		prio_array_t * _sc_array = runqueues->arrays + 2;
-		list_add_tail(&p->_sc_list, _sc_array->queue);	
-		__set_bit(0, _sc_array->bitmap);	
-		_sc_array->nr_active++;
-	}	
+		num_of_sc++;
+		list_add_tail(&p->_sc_list, _sc_array.queue);	
+		__set_bit(0, _sc_array.bitmap);	
+		_sc_array.nr_active++;
+	}
 
 	p->tux_info = NULL;
 	p->cpus_allowed_mask &= p->cpus_allowed;

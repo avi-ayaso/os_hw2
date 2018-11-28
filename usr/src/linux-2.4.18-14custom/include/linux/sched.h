@@ -456,8 +456,6 @@ struct task_struct {
 
 	// for hw2 - list node of changeables and their prio_array
 	list_t _sc_list;
-	prio_array_t *_sc_array;
-
 };
 
 /*
@@ -564,7 +562,6 @@ extern struct exec_domain	default_exec_domain;
     alloc_lock:		SPIN_LOCK_UNLOCKED,				\
     journal_info:	NULL,						\
 	_sc_list:		LIST_HEAD_INIT(tsk._sc_list),			\
-	_sc_array:		this_rq()->arrays+2,						\
 }
 
 
