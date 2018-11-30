@@ -232,15 +232,9 @@ static inline int sc_min(void) {
 /*
  * Adding/removing a task to/from a priority array:
  */
-// hw2
+
 static inline void dequeue_task(struct task_struct *p, prio_array_t *array)
 {
-	// if (p->policy == SCHED_CHANGEABLE) {
-	// 	list_del(&p->_sc_list);
-	// 	if (list_empty(_sc_array.queue))
-	// 		__clear_bit(0, _sc_array.bitmap);
-	// 	_sc_array.nr_active--;
-	// }
 	array->nr_active--;
 	list_del(&p->run_list);
 	if (list_empty(array->queue + p->prio))
@@ -248,14 +242,9 @@ static inline void dequeue_task(struct task_struct *p, prio_array_t *array)
 }
 
 
-// hw2
+
 static inline void enqueue_task(struct task_struct *p, prio_array_t *array)
 {
-	// if (p->policy == SCHED_CHANGEABLE) {
-	// 	list_add_tail(&p->_sc_list, _sc_array.queue);	
-	// 	__set_bit(0, _sc_array.bitmap);	
-	// 	_sc_array.nr_active++;	
-	// }
 	list_add_tail(&p->run_list, array->queue + p->prio);
 	__set_bit(p->prio, array->bitmap);
 	array->nr_active++;
@@ -287,6 +276,28 @@ static inline int effective_prio(task_t *p)
 		prio = MAX_PRIO-1;
 	return prio;
 }
+
+
+
+void activate_sc_task(task_t * p) {
+	num_of_sc++;
+	list_add_tail(&p->_sc_list, _sc_array.queue);	
+	__set_bit(0, _sc_array.bitmap);	
+	_sc_array.nr_active++;
+	return;
+}
+
+void deactivate_sc_task(task_t * p) {
+	list_del(&p->_sc_list);
+	if (list_empty(_sc_array.queue))
+		__clear_bit(0, _sc_array.bitmap);
+	_sc_array.nr_active--;
+	// in case there is no any sc left
+	if (!(--num_of_sc)) {
+		sc_policy = 0;
+	}
+}
+
 
 static inline void activate_task(task_t *p, runqueue_t *rq)
 {
@@ -325,11 +336,155 @@ static inline void deactivate_task(struct task_struct *p, runqueue_t *rq)
 
 	// in case we deactivating sc task - it doesn't mean policy is on/off
 	if (p->policy == SCHED_CHANGEABLE){
-		deactivate_sc_task(p)
+		deactivate_sc_task(p);
 	}
 	
 	
 }
+
+// ================================ SYS_ISCHANGEABLE ============================= //
+
+
+/*
+					=== system call number 243 ===
+	The wrapper will return 1 if the given process is a CHANGEABLE process,
+	or 0 if it is not.
+	Possible errors:
+	If no process with the corresponding PID exists - ESRCH
+*/
+int sys_is_changeable(pid_t pid) {
+	if (pid < 0) {
+		return -ESRCH;
+	}
+	task_t * p = find_task_by_pid(pid);
+	if ( p == NULL ) {
+		return -ESRCH;
+	}
+	return (p->policy == SCHED_CHANGEABLE);
+}
+
+// =============================================================================== //
+
+// =============================== SYS_MAKECHANGEABLE ============================ //
+
+/*
+						=== system call number 244 ===
+	If the caller process and the target process are both not CHANGEABLE,
+	the wrapper should return 0 and the process whose PID is pid should
+	become CHANGEABLE. Note that upon success the target process must
+	immediately be informed whether the regime is enabled or disabled for
+	CHANGEABLE processes, i.e. whether SC processes are currently
+	maintaining FIFO order or not, and act accordingly.
+	In other words, if there is at least one CHANGEABLE process alive
+	at the time the target process becomes CHANGEABLE, regardless of its
+	state- whether it is running or not, the target process should act the
+	same. If no such processes exist, the neophyte process should consider the
+	regime disabled. It is your responsibility to make sure that at any given
+	time all CHANGEABLE processes conform to the same regime. Possible errors:
+	If no process with the corresponding PID exists - ESRCH
+	if the given process or the calling process is a CHANGEABLE process - EINVAL
+*/
+int sys_make_changeable(pid_t pid) {
+	
+	if (pid < 0) {
+		return -ESRCH;
+	}
+	runqueue_t * rq = this_rq();
+	spin_lock_irq(rq);
+
+	task_t * p = find_task_by_pid(pid);
+	if ( p == NULL ) {
+		spin_unlock_irq(rq);
+		return -ESRCH;
+	}
+	if( (current->policy == SCHED_CHANGEABLE) || (p->policy == SCHED_CHANGEABLE) ) {
+		spin_unlock_irq(rq);
+		return -EINVAL;
+	}
+	p->policy = SCHED_CHANGEABLE;
+
+	// if running activate this also as sc
+	if (p->state == TASK_RUNNING) {
+		activate_sc_task(p);
+	}
+	int sc_min_pid = sc_min();
+	/*
+		When calling make_changeable() with the pid of the same calling process (i.e. a process that tries 
+		to make itself changeable), and in case the regime is enabled, the process should check if there 
+		is a more favorable SC process to run (lower PID) and evacuate the CPU if one is found.
+	*/
+	spin_unlock_irq(rq);
+	if (sc_policy == 1 && (p->pid == current->pid)) {
+
+		if (current->pid > sc_min_pid ) {
+			schedule();
+		}
+	}
+	return 0;
+}	
+
+// =============================================================================== //
+
+
+
+// ================================== SYS_CHANGE ================================= //
+/*
+						=== system call number 245 ===
+	The syscall changes the regime for SCHED_CHANGEABLE processes.
+	If val is 0, all CHANGEABLE processes should go back to behaving like
+	regular OTHER processes. If val is 1, all CHANGEABLE processes should start
+	following the regime specified previously.
+*/
+int sys_change(int val) {
+	runqueue_t * rq = this_rq();
+	spin_lock_irq(rq);
+	int ret_val = 0;
+	int min_sc_pid = 0;
+	switch(val) {
+		case 0: sc_policy = 0;
+		break;
+		case 1:	
+		{
+			sc_policy = 1;
+			min_sc_pid = sc_min();
+		}
+		break;
+		default: ret_val = -EINVAL;
+	}
+	spin_unlock_irq(rq);
+	/*
+		When SC process calls change(1) the process should check if there is a more 
+		favorable SC process to run (lower PID) and evacuate the CPU if one is found.
+	*/
+	if (current->policy == SCHED_CHANGEABLE && sc_policy == 1) {
+		if (current->pid > min_sc_pid) schedule();
+	}
+	return ret_val;
+}
+
+// =============================================================================== //
+
+// ================================ SYS_GETPOLICY ================================ //
+/*
+						=== system call number 246 ===
+	If the process with PID=pid is CHANGEABLE, the wrapper returns 0 if the
+	policy is disabled and 1 if it is enabled.
+	Possible errors:
+	If no process with the corresponding PID exists - ESRCH
+	If the target process is not CHANGEABLE – EINVAL
+*/
+int sys_get_policy(pid_t pid) {
+	int res = sys_is_changeable(pid);
+	switch(res) {
+		case 0:	res=-EINVAL; break;
+		case 1:	res=sc_policy; break;
+		default:	
+	}
+	return res;
+}
+
+// =============================================================================== //
+
 
 static inline void resched_task(task_t *p)
 {
@@ -387,34 +542,6 @@ void kick_if_running(task_t * p)
 }
 #endif
 
-void set_policy(void) {
-	sc_policy = 1;
-}
-
-void unset_policy(void) {
-	sc_policy = 0;
-}
-
-int get_policy(void) {
-	return sc_policy;
-}
-
-void activate_sc_task(task_t * p) {
-	num_of_sc++;
-	list_add_tail(&p->_sc_list, _sc_array.queue);	
-	__set_bit(0, _sc_array.bitmap);	
-	_sc_array.nr_active++;
-	return;
-}
-
-void deactivate_sc_task(task_t * p) {
-	list_del(&p->_sc_list);
-	if (list_empty(_sc_array.queue))
-		__clear_bit(0, _sc_array.bitmap);
-	_sc_array.nr_active--;
-	// in case there is no any sc left
-	if (!(--num_of_sc)) unset_policy();
-}
 
 /*
  * Wake up a process. Put it on the run-queue if it's not
@@ -487,7 +614,10 @@ void wake_up_forked_process(task_t * p)
 	}
 	p->cpu = smp_processor_id();
 	activate_task(p, rq);
-
+	// for hw2 - adding changeable to end of changable array
+	if (p->policy == SCHED_CHANGEABLE) {
+		activate_sc_task(p);
+	}
 	rq_unlock(rq);
 }
 

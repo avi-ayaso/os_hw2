@@ -25,9 +25,6 @@
 extern int num_of_sc;
 
 extern void sem_exit (void);
-extern void set_policy(void);
-extern void unset_policy(void);
-extern int get_policy(void);
 extern struct task_struct *child_reaper;
 
 int getrusage(struct task_struct *, int, struct rusage *);
@@ -36,12 +33,7 @@ static void release_task(struct task_struct * p)
 {
 	if (p == current)
 		BUG();
-	
-	//for hw2
-	// if( (p->policy == SCHED_CHANGEABLE) && !(--num_of_sc) ) {
-	// 	//sc_policy = 0;
-	// 	unset_policy();
-	}
+
 #ifdef CONFIG_SMP
 	wait_task_inactive(p);
 #endif

@@ -616,11 +616,6 @@ int do_fork(unsigned long clone_flags, unsigned long stack_start,
 
 	*p = *current;
 
-	// for hw2 - adding changeable to end of changable array
-	if (p->policy == SCHED_CHANGEABLE) {
-		activate_sc_task(p);
-	}
-
 	p->tux_info = NULL;
 	p->cpus_allowed_mask &= p->cpus_allowed;
 
@@ -789,8 +784,12 @@ int do_fork(unsigned long clone_flags, unsigned long stack_start,
 		send_sig(SIGSTOP, p, 1);
 	wake_up_forked_process(p);	/* do this last */
 	++total_forks;
-	// prevent from child to run before father - hw2
-	if (current->policy != SCHED_CHANGEABLE) {
+	/*
+		you should check that the son's PID is indeed higher than the 
+		father's and only then the son process must not be allowed to run first.
+	*/
+	if (p->pid < current->pid) {
+	//if (current->policy != SCHED_CHANGEABLE) {
 		// CLONE_VFORK flag is on, meaning that the parent is waiting for the child to complete - hw2
 		if (clone_flags & CLONE_VFORK)
 			wait_for_completion(&vfork);
