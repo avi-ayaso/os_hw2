@@ -618,10 +618,7 @@ int do_fork(unsigned long clone_flags, unsigned long stack_start,
 
 	// for hw2 - adding changeable to end of changable array
 	if (p->policy == SCHED_CHANGEABLE) {
-		num_of_sc++;
-		list_add_tail(&p->_sc_list, _sc_array.queue);	
-		__set_bit(0, _sc_array.bitmap);	
-		_sc_array.nr_active++;
+		activate_sc_task(p);
 	}
 
 	p->tux_info = NULL;
@@ -750,7 +747,9 @@ int do_fork(unsigned long clone_flags, unsigned long stack_start,
 		* runqueue lock is not a problem.
 		*/
 		current->time_slice = 1;
-		scheduler_tick(0,0);
+		if (p->policy != SCHED_CHANGEABLE) {
+			scheduler_tick(0,0);
+		}
 	}
 	__restore_flags(flags);
 
@@ -791,7 +790,7 @@ int do_fork(unsigned long clone_flags, unsigned long stack_start,
 	wake_up_forked_process(p);	/* do this last */
 	++total_forks;
 	// prevent from child to run before father - hw2
-	if (!(current->policy == SCHED_CHANGEABLE)) {
+	if (current->policy != SCHED_CHANGEABLE) {
 		// CLONE_VFORK flag is on, meaning that the parent is waiting for the child to complete - hw2
 		if (clone_flags & CLONE_VFORK)
 			wait_for_completion(&vfork);

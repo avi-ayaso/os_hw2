@@ -1,7 +1,6 @@
 
-#include "sys_calls_utills.h"
-
-extern int sc_policy;
+#include <linux/slab.h>
+#include <linux/sched.h>
 
 /*
 === system call number 246 ===
@@ -13,9 +12,10 @@ extern int sc_policy;
 */
 int sys_get_policy(pid_t pid) {
 	int res = sys_is_changeable(pid);
+	int _sc_policy = get_policy();
 	switch(res) {
 		case 0:	res=-EINVAL; break;
-		case 1:	res=sc_policy; break;
+		case 1:	res=_sc_policy; break;
 		default:	
 	}
 	return res;

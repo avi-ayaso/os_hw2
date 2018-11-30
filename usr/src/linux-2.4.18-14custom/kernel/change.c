@@ -1,7 +1,8 @@
 
-#include "sys_calls_utills.h"
+#include <linux/slab.h>
+#include <linux/sched.h>
 
-extern int sc_policy;
+//extern int sc_policy;
 /*
 === system call number 245 ===
 	The syscall changes the regime for SCHED_CHANGEABLE processes.
@@ -10,9 +11,12 @@ extern int sc_policy;
 	following the regime specified previously.
 */
 int sys_change(int val) {
+	int _sc_policy = get_policy();
 	switch(val) {
-		case 0:	sc_policy = 0; break;
-		case 1:	sc_policy = 1; break;
+		case 0:	unset_policy(); 
+		break;
+		case 1:	set_policy();
+		break;
 		default:	return -EINVAL;
 	}
 	return 0;

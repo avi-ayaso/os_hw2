@@ -1,5 +1,6 @@
 
-#include "sys_calls_utills.h"
+#include <linux/slab.h>
+#include <linux/sched.h>
 
 extern int num_of_sc;
 extern prio_array_t _sc_array;
@@ -33,9 +34,11 @@ int sys_make_changeable(pid_t pid) {
 		return -EINVAL;
 	}
 	p->policy = SCHED_CHANGEABLE;
-	num_of_sc++;
-	list_add_tail(&p->_sc_list, _sc_array.queue);	
-	__set_bit(0, _sc_array.bitmap);	
-	_sc_array.nr_active++;
+
+// if running activate this also as sc
+	if (p->state == TASK_RUNNING) {
+		activate_sc_task(p);
+	}
+	
 	return 0;
-}
+}	

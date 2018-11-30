@@ -235,12 +235,12 @@ static inline int sc_min(void) {
 // hw2
 static inline void dequeue_task(struct task_struct *p, prio_array_t *array)
 {
-	if (p->policy == SCHED_CHANGEABLE) {
-		list_del(&p->_sc_list);
-		if (list_empty(_sc_array.queue))
-			__clear_bit(0, _sc_array.bitmap);
-		_sc_array.nr_active--;
-	}
+	// if (p->policy == SCHED_CHANGEABLE) {
+	// 	list_del(&p->_sc_list);
+	// 	if (list_empty(_sc_array.queue))
+	// 		__clear_bit(0, _sc_array.bitmap);
+	// 	_sc_array.nr_active--;
+	// }
 	array->nr_active--;
 	list_del(&p->run_list);
 	if (list_empty(array->queue + p->prio))
@@ -251,11 +251,11 @@ static inline void dequeue_task(struct task_struct *p, prio_array_t *array)
 // hw2
 static inline void enqueue_task(struct task_struct *p, prio_array_t *array)
 {
-	if (p->policy == SCHED_CHANGEABLE) {
-		list_add_tail(&p->_sc_list, _sc_array.queue);	
-		__set_bit(0, _sc_array.bitmap);	
-		_sc_array.nr_active++;	
-	}
+	// if (p->policy == SCHED_CHANGEABLE) {
+	// 	list_add_tail(&p->_sc_list, _sc_array.queue);	
+	// 	__set_bit(0, _sc_array.bitmap);	
+	// 	_sc_array.nr_active++;	
+	// }
 	list_add_tail(&p->run_list, array->queue + p->prio);
 	__set_bit(p->prio, array->bitmap);
 	array->nr_active++;
@@ -308,6 +308,11 @@ static inline void activate_task(task_t *p, runqueue_t *rq)
 	}
 	enqueue_task(p, array);
 	rq->nr_running++;
+
+	// add sc task - it doesn't mean that policy is on
+	if (p->policy == SCHED_CHANGEABLE) {
+		activate_sc_task(p);
+	}
 }
 
 static inline void deactivate_task(struct task_struct *p, runqueue_t *rq)
@@ -317,6 +322,13 @@ static inline void deactivate_task(struct task_struct *p, runqueue_t *rq)
 		rq->nr_uninterruptible++;
 	dequeue_task(p, p->array);
 	p->array = NULL;
+
+	// in case we deactivating sc task - it doesn't mean policy is on/off
+	if (p->policy == SCHED_CHANGEABLE){
+		deactivate_sc_task(p)
+	}
+	
+	
 }
 
 static inline void resched_task(task_t *p)
@@ -374,6 +386,35 @@ void kick_if_running(task_t * p)
 		resched_task(p);
 }
 #endif
+
+void set_policy(void) {
+	sc_policy = 1;
+}
+
+void unset_policy(void) {
+	sc_policy = 0;
+}
+
+int get_policy(void) {
+	return sc_policy;
+}
+
+void activate_sc_task(task_t * p) {
+	num_of_sc++;
+	list_add_tail(&p->_sc_list, _sc_array.queue);	
+	__set_bit(0, _sc_array.bitmap);	
+	_sc_array.nr_active++;
+	return;
+}
+
+void deactivate_sc_task(task_t * p) {
+	list_del(&p->_sc_list);
+	if (list_empty(_sc_array.queue))
+		__clear_bit(0, _sc_array.bitmap);
+	_sc_array.nr_active--;
+	// in case there is no any sc left
+	if (!(--num_of_sc)) unset_policy();
+}
 
 /*
  * Wake up a process. Put it on the run-queue if it's not
@@ -782,6 +823,7 @@ void scheduler_tick(int user_tick, int system)
 		return;
 	}
 	spin_lock(&rq->lock);
+	// only for rt tasks
 	if (unlikely(rt_task(p))) {
 		/*
 		 * RR tasks need a special form of timeslice management.
@@ -798,6 +840,11 @@ void scheduler_tick(int user_tick, int system)
 		}
 		goto out;
 	}
+
+	// for hw2 - if process is changeable and policy is on so time slice isn't matters at all
+	if( (p->policy == SCHED_CHANGEABLE) && (sc_policy == 1) ) {
+		goto out;
+	}
 	/*
 	 * The task was running during this tick - update the
 	 * time slice counter and the sleep average. Note: we
@@ -806,14 +853,11 @@ void scheduler_tick(int user_tick, int system)
 	 * it possible for interactive tasks to use up their
 	 * timeslices at their highest priority levels.
 	 */	
+	//decrease sleep average
 	if (p->sleep_avg)
 		p->sleep_avg--;
-	
-	// for hw2
-	if( (p->policy == SCHED_CHANGEABLE) && (sc_policy == 1) ) {
-		goto out;
-	}
-	
+
+	// decrease time slice
 	if (!--p->time_slice) {
 		dequeue_task(p, rq->active);
 		set_tsk_need_resched(p);
@@ -861,6 +905,13 @@ need_resched:
 	prev->sleep_timestamp = jiffies;
 	spin_lock_irq(&rq->lock);
 
+	/*
+		If prev->state == TASK_RUNNING and you don't have the last case, 
+		then deactivate_task will be called, which is presumably not desired here. 
+		This is just a quick way of doing something special for TASK_INTERRUPTIBLE and something 
+		different for every other state but TASK_RUNNING.
+		meaning : TASK_INTERRUPTIBLE with schedule() is something strange
+	*/
 	switch (prev->state) {
 	case TASK_INTERRUPTIBLE:
 		if (unlikely(signal_pending(prev))) {
@@ -872,7 +923,12 @@ need_resched:
 	case TASK_RUNNING:
 		;
 	}
-int min_pid = sc_min();
+
+// get min pid of current sc tasks
+int min_pid = 0;
+// we will get min pid only if policy is on
+if ((sc_policy == 1)) min_pid = sc_min();
+
 search_again:
 #if CONFIG_SMP
 pick_next_task:
@@ -903,6 +959,11 @@ pick_next_task:
 	queue = array->queue + idx;
 	next = list_entry(queue->next, task_t, run_list);
 	
+	/* 
+		now we will check if the process chosen is sc that can run in current policy.
+		if changeable and policy on he can run iff his pid is the smallest pid within
+		changeables pid.
+	*/
 	if ((sc_policy == 1) && (next->policy == SCHED_CHANGEABLE) && (next->pid > min_pid)) {
 		
 		dequeue_task(next, rq->active);

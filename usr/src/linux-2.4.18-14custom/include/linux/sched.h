@@ -507,6 +507,13 @@ extern int task_prio(task_t *p);
 extern int task_nice(task_t *p);
 extern int idle_cpu(int cpu);
 
+
+// for hw2
+extern void set_policy();
+extern void unset_policy();
+extern int get_policy();
+
+
 asmlinkage long sys_sched_yield(void);
 #define yield() sys_sched_yield()
 
