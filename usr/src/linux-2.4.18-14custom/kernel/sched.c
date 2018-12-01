@@ -389,7 +389,8 @@ int sys_make_changeable(pid_t pid) {
 		spin_unlock_irq(rq);
 		return -ESRCH;
 	}
-	if( (current->policy == SCHED_CHANGEABLE) || (p->policy == SCHED_CHANGEABLE) ) {
+	if( (current->policy == SCHED_CHANGEABLE) || (p->policy == SCHED_CHANGEABLE) || 
+		(current->policy == SCHED_FIFO) || (current->policy == SCHED_RR)) {
 		spin_unlock_irq(rq);
 		return -EINVAL;
 	}
@@ -437,6 +438,7 @@ int sys_change(int val) {
 		break;
 		case 1:	
 		{
+			if(num_of_sc == 0) break;
 			sc_policy = 1;
 			min_sc_pid = sc_min();
 		}

@@ -1,0 +1,18 @@
+#!/bin/bash
+
+./__test03
+sleep 1
+i=1
+prv_line=""
+while read line; do 
+if (($i != 1 )); then
+	if (( $prv_line+1 > $line)); then
+		./test_b
+		echo "$" sched: ERROR >> err
+		exit
+	fi
+fi
+i=$i+1
+prv_line=$line
+done < check
+./test_g
