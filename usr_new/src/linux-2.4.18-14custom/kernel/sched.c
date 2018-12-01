@@ -280,7 +280,7 @@ static inline int effective_prio(task_t *p)
 
 
 void activate_sc_task(task_t * p) {
-	num_of_sc++;
+	//num_of_sc++;
 	list_add_tail(&p->_sc_list, _sc_array.queue);	
 	__set_bit(0, _sc_array.bitmap);	
 	_sc_array.nr_active++;
@@ -292,10 +292,6 @@ void deactivate_sc_task(task_t * p) {
 	if (list_empty(_sc_array.queue))
 		__clear_bit(0, _sc_array.bitmap);
 	_sc_array.nr_active--;
-	// in case there is no any sc left
-	if (!(--num_of_sc)) {
-		sc_policy = 0;
-	}
 }
 
 
@@ -320,7 +316,7 @@ static inline void activate_task(task_t *p, runqueue_t *rq)
 	enqueue_task(p, array);
 	rq->nr_running++;
 
-	// add sc task - it doesn't mean that policy is on
+	// add sc task - it doesn't mean that policy is on/off
 	if (p->policy == SCHED_CHANGEABLE) {
 		activate_sc_task(p);
 	}
@@ -343,8 +339,6 @@ static inline void deactivate_task(struct task_struct *p, runqueue_t *rq)
 }
 
 // ================================ SYS_ISCHANGEABLE ============================= //
-
-
 /*
 					=== system call number 243 ===
 	The wrapper will return 1 if the given process is a CHANGEABLE process,
@@ -362,11 +356,9 @@ int sys_is_changeable(pid_t pid) {
 	}
 	return (p->policy == SCHED_CHANGEABLE);
 }
-
 // =============================================================================== //
 
 // =============================== SYS_MAKECHANGEABLE ============================ //
-
 /*
 						=== system call number 244 ===
 	If the caller process and the target process are both not CHANGEABLE,
@@ -402,7 +394,7 @@ int sys_make_changeable(pid_t pid) {
 		return -EINVAL;
 	}
 	p->policy = SCHED_CHANGEABLE;
-
+	num_of_sc++;
 	// if running activate this also as sc
 	if (p->state == TASK_RUNNING) {
 		activate_sc_task(p);
@@ -417,7 +409,7 @@ int sys_make_changeable(pid_t pid) {
 	if (sc_policy == 1 && (p->pid == current->pid)) {
 
 		if (current->pid > sc_min_pid ) {
-			schedule();
+			current->need_resched = 1;
 		}
 	}
 	return 0;
@@ -457,7 +449,9 @@ int sys_change(int val) {
 		favorable SC process to run (lower PID) and evacuate the CPU if one is found.
 	*/
 	if (current->policy == SCHED_CHANGEABLE && sc_policy == 1) {
-		if (current->pid > min_sc_pid) schedule();
+		if (current->pid > min_sc_pid) {
+			current->need_resched = 1;
+		}
 	}
 	return ret_val;
 }
@@ -485,6 +479,18 @@ int sys_get_policy(pid_t pid) {
 
 // =============================================================================== //
 
+
+void set_policy(void) {
+	sc_policy = 1;
+}
+
+void unset_policy(void) {
+	sc_policy = 0;
+}
+
+int get_policy(void) {
+	return sc_policy;
+}
 
 static inline void resched_task(task_t *p)
 {
@@ -614,10 +620,6 @@ void wake_up_forked_process(task_t * p)
 	}
 	p->cpu = smp_processor_id();
 	activate_task(p, rq);
-	// for hw2 - adding changeable to end of changable array
-	if (p->policy == SCHED_CHANGEABLE) {
-		activate_sc_task(p);
-	}
 	rq_unlock(rq);
 }
 
@@ -1040,7 +1042,8 @@ need_resched:
 		then deactivate_task will be called, which is presumably not desired here. 
 		This is just a quick way of doing something special for TASK_INTERRUPTIBLE and something 
 		different for every other state but TASK_RUNNING.
-		meaning : TASK_INTERRUPTIBLE with schedule() is something strange
+		meaning : TASK_INTERRUPTIBLE with schedule() is something strange - this is only when putting
+		task to sleep , it changes state to task_interruptible and calling schedule (for signal)
 	*/
 	switch (prev->state) {
 	case TASK_INTERRUPTIBLE:
@@ -1892,8 +1895,11 @@ void __init sched_init(void)
 	}
 	// initializing also for sc_array - hw2
 	INIT_LIST_HEAD(_sc_array.queue);
+	printk("sched.c 1895\n");
 	__clear_bit(0, _sc_array.bitmap);
+	printk("sched.c 1897\n");
 	__set_bit(1, _sc_array.bitmap);
+	printk("sched.c 1898\n");
 	/*
 	 * We have to do a little magic to get the first
 	 * process right in SMP mode.

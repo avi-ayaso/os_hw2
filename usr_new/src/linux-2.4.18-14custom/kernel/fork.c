@@ -783,23 +783,25 @@ int do_fork(unsigned long clone_flags, unsigned long stack_start,
 	if (p->ptrace & PT_PTRACED)
 		send_sig(SIGSTOP, p, 1);
 	wake_up_forked_process(p);	/* do this last */
+	if (p->policy == SCHED_CHANGEABLE){
+		num_of_sc++;
+		if (p->pid < current->pid && (get_policy() == 1)){
+			current->need_resched = 1;
+		}
+	}
 	++total_forks;
 	/*
 		you should check that the son's PID is indeed higher than the 
 		father's and only then the son process must not be allowed to run first.
 	*/
-	if (p->pid < current->pid) {
-	//if (current->policy != SCHED_CHANGEABLE) {
-		// CLONE_VFORK flag is on, meaning that the parent is waiting for the child to complete - hw2
-		if (clone_flags & CLONE_VFORK)
-			wait_for_completion(&vfork);
-		else
-			/*
-			* Let the child process run first, to avoid most of the
-			* COW overhead when the child exec()s afterwards.
-			*/
-				current->need_resched = 1;
-	}
+	if (clone_flags & CLONE_VFORK)
+		wait_for_completion(&vfork);
+	else
+		/*
+		* Let the child process run first, to avoid most of the
+		* COW overhead when the child exec()s afterwards.
+		*/
+		current->need_resched = 1;
 fork_out:
 	return retval;
 

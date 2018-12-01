@@ -20,9 +20,10 @@
 #include <asm/uaccess.h>
 #include <asm/pgtable.h>
 #include <asm/mmu_context.h>
+#include <linux/sched.h>
 
 //for hw2
-extern int num_of_sc;
+extern void unset_policy(void);
 
 extern void sem_exit (void);
 extern struct task_struct *child_reaper;
@@ -501,7 +502,13 @@ NORET_TYPE void do_exit(long code)
 		panic("Attempted to kill init!");
 	tsk->flags |= PF_EXITING;
 	del_timer_sync(&tsk->real_timer);
-
+	// for hw2 - 
+	if (tsk->policy == SCHED_CHANGEABLE) {
+		if (!(--num_of_sc)) {
+			unset_policy();
+		}
+	}
+	
 fake_volatile:
 #ifdef CONFIG_BSD_PROCESS_ACCT
 	acct_process(code);
