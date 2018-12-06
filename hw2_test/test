@@ -1,0 +1,8 @@
+#!/bin/bash
+
+./cmpl
+./test_s
+./test01
+./test02
+./test03
+./test_t

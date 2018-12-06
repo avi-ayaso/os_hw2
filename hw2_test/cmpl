@@ -1,0 +1,9 @@
+#!/bin/bash
+
+gcc test_s.c -o test_s
+gcc test01.c -o test01
+gcc test02.c -o test02
+gcc test03.c -o __test03
+gcc test_g.c -o test_g
+gcc test_b.c -o test_b
+gcc test_t.c -o test_t

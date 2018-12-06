@@ -24,6 +24,7 @@
 
 //for hw2
 extern void unset_policy(void);
+extern int num_of_sc;
 extern void sem_exit (void);
 extern struct task_struct *child_reaper;
 
